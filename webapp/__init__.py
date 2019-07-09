@@ -86,6 +86,20 @@ def create_app():
                 [
                     dbc.Col(
                         [
+                            html.Div(dcc.RadioItems(id='day-or-month-choose', options=[
+                                                                        {'label': 'День', 'value': 'day'}, 
+                                                                        {'label': 'Месяц', 'value': 'month'}],
+                                                                        value='day'))
+                        ],
+                        md=4,
+                    )
+                ]
+            ),
+            
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [
                             html.H4("Выберите дату и объект"),
                             html.Div(dcc.DatePickerSingle(id='date-picker-single', date=dt(2018, 10,10))),
                             dcc.Dropdown(id='my-dropdown', options=df_number_obj, value='', placeholder='Выберите объект'),
@@ -99,6 +113,7 @@ def create_app():
                                          clearable=False),
                             html.Div(id='intermediate-value', style={'display': 'none'}),
                             html.Div(id='num-object-to-submit', style={'display': 'none'}),
+                            #html.Div(id='selected-day-or-month', style={'display': 'none'})
                         ],
                         md=4,
                     ),
@@ -119,11 +134,19 @@ def create_app():
     
    #callbacks
 
-    @dashapp.callback(Output('intermediate-value', 'children'), [Input('date-picker-single', 'date')])
-    def update_output(date):
+    @dashapp.callback(Output('intermediate-value', 'children'), 
+                      [Input('date-picker-single', 'date')], 
+                      [State('day-or-month-choose', 'value')])
+    def update_output(date, value):
         if date is not None:
-            date = dt.strptime(date, '%Y-%m-%d')
-            return date
+            if value == 'day':
+                date = f"= '{}'"
+                print(date)
+                return date
+            if value == 'month':
+                date = f"LIKE '{date[:-3]}-%'"
+                print(date)
+                return date
 
     @dashapp.callback(Output('list-counters', 'options'), [Input('my-dropdown', 'value')])
     def get_list_counters_of_obj(num_obj):
@@ -197,7 +220,7 @@ def create_app():
                     FROM
                     CNT.BUF_V_INT
                     WHERE 1=1
-                    AND DD_MM_YYYY = '{}'
+                    AND DD_MM_YYYY {}
                     AND N_INTER_RAS BETWEEN 1 AND 48
                     AND N_OB = {}
                     AND N_GR_TY = 1
@@ -205,11 +228,27 @@ def create_app():
                     """.format(new_date, number_object, number_counter)
             df = pd.read_sql(query, con=conn)
             number_counter = int(df.iloc[1]['N_SH'])
+
+            dict_convert_to_halfhour = {'1': '00:00', '2': '00:30', '3': '01:00', '4': '01:30', '5': '02:00', '6': '02:30', 
+                                    '7': '03:00', '8': '03:30', '9': '04:00', '10': '04:30', '11': '05:00', '12': '05:30',
+                                    '13': '06:00', '14': '06:30', '15': '07:00', '16': '07:30', '17': '08:00', '18': '08:30',
+                                    '19': '09:00', '20': '09:30', '21': '10:00', '22': '10:30', '23': '11:00', '24': '11:30',
+                                    '25': '12:00', '26': '12:30', '27': '13:00', '28': '13:30', '29': '14:00', '30': '14:30',
+                                    '31': '15:00', '32': '15:30', '33': '16:00', '34': '16:30', '35': '17:00', '36': '17:30',
+                                    '37': '18:00', '38': '18:30', '39': '19:00', '40': '19:30', '41': '20:00', '42': '20:30',
+                                    '43': '21:00', '44': '21:30', '45': '22:00', '46': '22:30', '47': '23:00', '48': '23:30'}
+            
+            df.N_INTER_RAS = df.N_INTER_RAS.astype(str).replace(dict_convert_to_halfhour)
+            df['DD_MM_YYYY'] = df['DD_MM_YYYY'].astype(str)
+            df['new_date'] = pd.to_datetime(df['DD_MM_YYYY'] + ' ' + df['N_INTER_RAS'])
+            df_freq_day = df.groupby(['N_SH', pd.Grouper(key='new_date', freq='D')])['VAL'].sum().reset_index()
+            print
+            
             figure = go.Figure(
                     data=[
                         go.Bar(
-                            x=df['N_INTER_RAS'].tolist(),
-                            y=df['VAL'].tolist(),
+                            x=df_freq_day['new_date'].tolist(),
+                            y=df_freq_day['VAL'].tolist(),
                             name='Расход',
                             marker=go.bar.Marker(
                                 color='rgb(55, 83, 109)'
