@@ -1,4 +1,5 @@
 from datetime import datetime as dt
+from datetime import timedelta
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -106,6 +107,7 @@ def create_app():
                         [
                             html.H2("График за месяц"),
                             html.Div(dcc.Graph(id='month-graph')),
+                            html.Div(id='json-month-data', style={'display': 'none'})
                         ]
                     ),
                 ]
@@ -114,8 +116,8 @@ def create_app():
                 [
                     dbc.Col(
                         [
-                           html.Div(html.Pre(id='click-data'))
-                           # html.Div(dcc.Graph(id='day-graph') 
+                           #html.Div(html.Pre(id='click-data')),
+                           html.Div(dcc.Graph(id='day-graph')) 
                         ],
                         md=10,
                     )
@@ -130,7 +132,8 @@ def create_app():
 #/END_DASH_LAYOUT-----------------------------------------------------------------------------------------------
 #DASH_CALLBACKS----------------------------------------------------------------------------------------------------------
     #выбор опций для radioitems с названиями фидеров выбранного объекта
-    @dashapp.callback(Output('list-counters', 'options'), [Input('choose-object', 'value')])
+    @dashapp.callback(Output('list-counters', 'options'), 
+                      [Input('choose-object', 'value')])
     def get_list_counters_of_obj(num_obj):
         try:        
             conn = cx_Oracle.connect(USER_NAME, PASSWORD, dns_tsn)
@@ -177,13 +180,12 @@ def create_app():
         root_dir = os.getcwd()
         return send_from_directory(os.path.join(root_dir, 'downloads'), path)
 
-    #формирования графика потребления за месяц    
-    @dashapp.callback(Output('month-graph', 'figure'), 
-                [Input('submit-button', 'n_clicks')],
-                [State('date-picker-single', 'date'),
-                 State('choose-object', 'value'),
-                 State('list-counters', 'value')])
-    def update_graph(n_clicks, choosen_month, number_object, number_counter):
+    #создание датасетов DATAFRAME объекта за месяц, день   
+    @dashapp.callback(Output('json-month-data', 'children'),
+                      [Input('date-picker-single', 'date')],
+                      [State('choose-object', 'value'),
+                       State('list-counters', 'value')])
+    def get_month_data(choosen_month, number_object, number_counter):
         if choosen_month is not None:
             date = f"LIKE '{choosen_month[:-3]}-%'"
         try:
@@ -216,7 +218,7 @@ def create_app():
             cur.close()
             conn.close()
 
-        number_counter = int(df.iloc[1]['N_SH'])
+        
         #приведение Dataframe к TimeSeries 
         dict_convert_to_halfhour = {'1': '00:00', '2': '00:30', '3': '01:00', '4': '01:30', '5': '02:00', '6': '02:30', 
                                 '7': '03:00', '8': '03:30', '9': '04:00', '10': '04:30', '11': '05:00', '12': '05:30',
@@ -228,16 +230,36 @@ def create_app():
                                 '43': '21:00', '44': '21:30', '45': '22:00', '46': '22:30', '47': '23:00', '48': '23:30'}        
         df['N_INTER_RAS'] = df['N_INTER_RAS'].astype(str).replace(dict_convert_to_halfhour)
         df['DD_MM_YYYY'] = df['DD_MM_YYYY'].astype(str)
-        df['new_date'] = pd.to_datetime(df['DD_MM_YYYY'] + ' ' + df['N_INTER_RAS'])
-        df_freq_day = df.groupby(['N_SH', pd.Grouper(key='new_date', freq='D')])['VAL'].sum().reset_index()
-        df_freq_hour = df.groupby(['N_SH', pd.Grouper(key='new_date', freq='H')])['VAL'].sum().reset_index()
-        df_freq_halfhour = df.groupby(['N_SH', pd.Grouper(key='new_date', freq='30min')])['VAL'].sum().reset_index()
+        df['date'] = pd.to_datetime(df['DD_MM_YYYY'] + ' ' + df['N_INTER_RAS'])
+        del df['DD_MM_YYYY']
+        del df['N_INTER_RAS']
+        df_1 = df.groupby(['N_SH', pd.Grouper(key='date', freq='D')])['VAL'].sum().reset_index()
+        df_2 = df.groupby(['N_SH', pd.Grouper(key='date', freq='H')])['VAL'].sum().reset_index()
+        df_3 = df.groupby(['N_SH', pd.Grouper(key='date', freq='30min')])['VAL'].sum().reset_index()
+        datasets = {
+                'df_1': df_1.to_json(orient='split', date_format='iso'),
+                'df_2': df_2.to_json(orient='split', date_format='iso'),
+                'df_3': df_3.to_json(orient='split', date_format='iso')
+            }
+               
+        return json.dumps(datasets)
+    
+    
+    #формирования графика потребления за месяц
+    @dashapp.callback(Output('month-graph', 'figure'), 
+                [Input('submit-button', 'n_clicks')],
+                [State('json-month-data', 'children')])
+    def update_graph(n_clicks, json_month):
+        datasets = json.loads(json_month)
+        dff = pd.read_json(datasets['df_1'], orient='split', convert_dates='True')
+
+        number_counter = int(dff.iloc[1]['N_SH'])        
         #график        
         figure = go.Figure(
                 data=[
                     go.Bar(
-                        x=df_freq_day['new_date'].tolist(),
-                        y=df_freq_day['VAL'].tolist(),
+                        x=dff['date'].tolist(),
+                        y=dff['VAL'].tolist(),
                         name='Расход',
                         marker=go.bar.Marker(
                             color='rgb(55, 83, 109)'
@@ -246,8 +268,8 @@ def create_app():
                 ],
                 layout=go.Layout(
                     yaxis={'type': 'log', 'title': 'Энергия, кВтч'},
-                    xaxis={'title': 'Номер получасовки'},
-                    title=f"Расход электроэнергии за {choosen_month} по счетчику № {number_counter}",
+                    xaxis={'title': ''},
+                    title=f"Расход электроэнергии за месяц по счетчику № {number_counter}",
                     showlegend=True,
                     legend=go.layout.Legend(
                         x=0,
@@ -259,10 +281,52 @@ def create_app():
         return figure
     
     #формирования графика потребления за день
-    @dashapp.callback(Output('click-data', 'children'),
-                      [Input('month-graph', 'clickData')])
-    def diplay_clickdata(clickData):
+    @dashapp.callback(Output('day-graph', 'figure'),
+                      [Input('month-graph', 'clickData'),
+                      Input('json-month-data', 'children')])
+    def update_daily_graph(clickData, json_month):
+        datasets = json.loads(json_month)
+        dff = pd.read_json(datasets['df_3'], orient='split', convert_dates='True')
+        clickedData = clickData['points'][0]['x']
+        begin_day = pd.Timestamp(clickedData)
+        end_day = begin_day + timedelta(days=1)
+        dff_day = dff[(dff['date'] >= begin_day) & (dff['date'] < end_day)] 
+        number_counter = int(dff.iloc[1]['N_SH'])        
+        #график        
+        figure = go.Figure(
+                data=[
+                    go.Bar(
+                        x=dff_day['date'].tolist(),
+                        y=dff_day['VAL'].tolist(),
+                        name='Расход',
+                        marker=go.bar.Marker(
+                            color='rgb(55, 83, 109)'
+                        )
+                    ),
+                ],
+                layout=go.Layout(
+                    yaxis={'type': 'log', 'title': 'Энергия, кВтч'},
+                    xaxis={'title': ''},
+                    title=f"Расход электроэнергии за день по счетчику № {number_counter}",
+                    showlegend=True,
+                    legend=go.layout.Legend(
+                        x=0,
+                        y=1.0
+                    ),
+                    margin=go.layout.Margin(l=40, r=0, t=40, b=30)
+                )
+            )
+        return figure
+
+
+
         return json.dumps(clickData, indent=2)
+    
+    #рабочий пример с click-data
+    #@dashapp.callback(Output('click-data', 'children'),
+    #                  [Input('month-graph', 'clickData')])
+    #def diplay_clickdata(clickData):
+    #    return json.dumps(clickData, indent=2)
 #/END_DASH_CALLBACKS-----------------------------------------------------------------------------------------------------------------
 
 
