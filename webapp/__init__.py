@@ -4,6 +4,7 @@ import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
+import json
 import cx_Oracle
 from webapp.config import USER_NAME, PASSWORD, dns_tsn
 from flask import Flask, redirect, url_for, send_from_directory, render_template
@@ -33,9 +34,9 @@ def create_app():
     app.register_blueprint(news_blueprint)
     dashapp = dash.Dash(__name__, server=app, routes_pathname_prefix='/dash/', external_stylesheets=[dbc.themes.BOOTSTRAP])
     
-    #layout
+#DASH_LAYOUT-------------------------------------------------------------------------------------------------------------
+    #получение списка объектов из БД
     try:
-
         conn = cx_Oracle.connect(USER_NAME, PASSWORD, dns_tsn)
         cur = conn.cursor()
         cur.execute("""
@@ -51,15 +52,14 @@ def create_app():
                     ORDER BY N_OB
                     
                     """
-        df = pd.read_sql(query, con=conn)
-        
+        df_number_obj = pd.read_sql(query, con=conn).rename(columns={"N_OB": "value", "TXT_N_OB_25": "label"}).to_dict('records')
+    except(cx_Oracle.DatabaseError):
+        print('УУУУУУУУУУУУУУУУУУУУУУУУУУУУУУПППППППППППППППППППППППППСССССССССССССССССССССС')    
     finally:
         cur.close()
         conn.close()
 
-    df_number_obj = df.rename(columns={"N_OB": "value", "TXT_N_OB_25": "label"}).to_dict('records')
-
-    #navbar
+    #navbar-----------------------------------------------------------------------------------------------------------------
     navbar = dbc.NavbarSimple(
     children=[
         dbc.NavItem(dbc.NavLink("Link", href='')),
@@ -79,76 +79,58 @@ def create_app():
     brand_href="/",
     sticky="top",
     )
-
+    #/end_navbar---------------------------------------------------------------------------
+    #body------------------------------------------------------------------------------
     body = dbc.Container(
         [
             dbc.Row(
                 [
                     dbc.Col(
                         [
-                            html.Div(dcc.RadioItems(id='day-or-month-choose', options=[
-                                                                        {'label': 'День', 'value': 'day'}, 
-                                                                        {'label': 'Месяц', 'value': 'month'}],
-                                                                        value='day'))
-                        ],
-                        md=4,
-                    )
-                ]
-            ),
-            
-            dbc.Row(
-                [
-                    dbc.Col(
-                        [
-                            html.H4("Выберите дату и объект"),
+                            html.H4("1. Выберите объект:"),
+                            
+                            dcc.Dropdown(id='choose-object', options=df_number_obj, value='', placeholder='Выберите объект'),
+                            html.H4("2. Выберите фидер:"),
+                            dbc.RadioItems(id='list-counters', className="form-check"),
+                            html.H4("3. Выберите месяц:"),
                             html.Div(dcc.DatePickerSingle(id='date-picker-single', date=dt(2018, 10,10))),
-                            dcc.Dropdown(id='my-dropdown', options=df_number_obj, value='', placeholder='Выберите объект'),
-                            html.Div(dcc.Dropdown(id='list-counters', value='', placeholder='Выберите фидер')),
-                            #html.Div(html.Table(id='table')),                                
-                            #html.Div(html.Button(id='submit-button', children='Показать')), 
-                            dbc.Button("Показать", id='submit-button', color="secondary"),
+                            dbc.Button("Загрузить данные", id='submit-button', color="secondary"),
                             html.Div(html.A(id='download-link', children='Скачать файл')),
                             dcc.Dropdown(id='dropdown', options=[{'label': i, 'value': i} for i in ['NYC', 'LA', 'SF']],
                                          value='NYC',
                                          clearable=False),
-                            html.Div(id='intermediate-value', style={'display': 'none'}),
-                            html.Div(id='num-object-to-submit', style={'display': 'none'}),
-                            #html.Div(id='selected-day-or-month', style={'display': 'none'})
                         ],
                         md=4,
                     ),
                     dbc.Col(
                         [
-                            html.H2("График"),
-                            html.Div(dcc.Graph(id='graph')),
+                            html.H2("График за месяц"),
+                            html.Div(dcc.Graph(id='month-graph')),
                         ]
                     ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [
+                           html.Div(html.Pre(id='click-data'))
+                           # html.Div(dcc.Graph(id='day-graph') 
+                        ],
+                        md=10,
+                    )
                 ]
             )
         ],
         className="mt-4",
     )
-
-    
+    #/end_body------------------------------------------------------------------------------------------- 
     dashapp.layout = html.Div([navbar, body])
     
-   #callbacks
-
-    @dashapp.callback(Output('intermediate-value', 'children'), 
-                      [Input('date-picker-single', 'date')], 
-                      [State('day-or-month-choose', 'value')])
-    def update_output(date, value):
-        if date is not None:
-            if value == 'day':
-                date = f"= '{date}'"
-                print(date)
-                return date
-            if value == 'month':
-                date = f"LIKE '{date[:-3]}-%'"
-                print(date)
-                return date
-
-    @dashapp.callback(Output('list-counters', 'options'), [Input('my-dropdown', 'value')])
+#/END_DASH_LAYOUT-----------------------------------------------------------------------------------------------
+#DASH_CALLBACKS----------------------------------------------------------------------------------------------------------
+    #выбор опций для radioitems с названиями фидеров выбранного объекта
+    @dashapp.callback(Output('list-counters', 'options'), [Input('choose-object', 'value')])
     def get_list_counters_of_obj(num_obj):
         try:        
             conn = cx_Oracle.connect(USER_NAME, PASSWORD, dns_tsn)
@@ -167,18 +149,15 @@ def create_app():
                 AND N_OB = '{}'
                 ORDER BY N_FID
                     """.format(num_obj)
-            df = pd.read_sql(query, con=conn)
-            df_list_counters = df.rename(columns={"N_SH": "value", "TXT_FID": "label"}).to_dict('records')        
+            df_list_counters = pd.read_sql(query, con=conn).rename(columns={"N_SH": "value", "TXT_FID": "label"}).to_dict('records')        
             return df_list_counters
+        except(cx_Oracle.DatabaseError):
+            print('УУУУУУУУУУУУУУУУУУУУУУУУУУУУУУПППППППППППППППППППППППППСССССССССССССССССССССС')
         finally:
             cur.close()
             conn.close()
-        
-    @dashapp.callback(Output('num-object-to-submit', 'children'), [Input('my-dropdown', 'value')])
-    def get_num_obj(num_obj):
-        return num_obj    
-        
-
+            
+    #создание и скачивание файла отчета
     @dashapp.callback(Output('download-link', 'href'), [Input('dropdown', 'value')])
     def update_href(dropdown_value):
         df = pd.DataFrame({dropdown_value: [1, 2, 3]})
@@ -198,13 +177,15 @@ def create_app():
         root_dir = os.getcwd()
         return send_from_directory(os.path.join(root_dir, 'downloads'), path)
 
-        
-    @dashapp.callback(Output('graph', 'figure'), 
+    #формирования графика потребления за месяц    
+    @dashapp.callback(Output('month-graph', 'figure'), 
                 [Input('submit-button', 'n_clicks')],
-                [State('intermediate-value', 'children'),
-                 State('num-object-to-submit', 'children'),
+                [State('date-picker-single', 'date'),
+                 State('choose-object', 'value'),
                  State('list-counters', 'value')])
-    def update_graph(n_clicks, new_date, number_object, number_counter):
+    def update_graph(n_clicks, choosen_month, number_object, number_counter):
+        if choosen_month is not None:
+            date = f"LIKE '{choosen_month[:-3]}-%'"
         try:
             
             conn = cx_Oracle.connect(USER_NAME, PASSWORD, dns_tsn)
@@ -225,14 +206,18 @@ def create_app():
                     AND N_OB = {}
                     AND N_GR_TY = 1
                     AND N_SH = '{}'
-                    """.format(new_date, number_object, number_counter)
+                    """.format(date, number_object, number_counter)
             df = pd.read_sql(query, con=conn)
+        except(cx_Oracle.DatabaseError):
+            print('УУУУУУУУУУУУУУУУУУУУУУУУУУУУУУПППППППППППППППППППППППППСССССССССССССССССССССС')
+        except IndexError:
+            print('У выбранного фидера нет данных за указанный месяц')
         finally:
             cur.close()
             conn.close()
 
         number_counter = int(df.iloc[1]['N_SH'])
-
+        #приведение Dataframe к TimeSeries 
         dict_convert_to_halfhour = {'1': '00:00', '2': '00:30', '3': '01:00', '4': '01:30', '5': '02:00', '6': '02:30', 
                                 '7': '03:00', '8': '03:30', '9': '04:00', '10': '04:30', '11': '05:00', '12': '05:30',
                                 '13': '06:00', '14': '06:30', '15': '07:00', '16': '07:30', '17': '08:00', '18': '08:30',
@@ -240,14 +225,14 @@ def create_app():
                                 '25': '12:00', '26': '12:30', '27': '13:00', '28': '13:30', '29': '14:00', '30': '14:30',
                                 '31': '15:00', '32': '15:30', '33': '16:00', '34': '16:30', '35': '17:00', '36': '17:30',
                                 '37': '18:00', '38': '18:30', '39': '19:00', '40': '19:30', '41': '20:00', '42': '20:30',
-                                '43': '21:00', '44': '21:30', '45': '22:00', '46': '22:30', '47': '23:00', '48': '23:30'}
-        
+                                '43': '21:00', '44': '21:30', '45': '22:00', '46': '22:30', '47': '23:00', '48': '23:30'}        
         df['N_INTER_RAS'] = df['N_INTER_RAS'].astype(str).replace(dict_convert_to_halfhour)
         df['DD_MM_YYYY'] = df['DD_MM_YYYY'].astype(str)
         df['new_date'] = pd.to_datetime(df['DD_MM_YYYY'] + ' ' + df['N_INTER_RAS'])
         df_freq_day = df.groupby(['N_SH', pd.Grouper(key='new_date', freq='D')])['VAL'].sum().reset_index()
-        
-        
+        df_freq_hour = df.groupby(['N_SH', pd.Grouper(key='new_date', freq='H')])['VAL'].sum().reset_index()
+        df_freq_halfhour = df.groupby(['N_SH', pd.Grouper(key='new_date', freq='30min')])['VAL'].sum().reset_index()
+        #график        
         figure = go.Figure(
                 data=[
                     go.Bar(
@@ -262,7 +247,7 @@ def create_app():
                 layout=go.Layout(
                     yaxis={'type': 'log', 'title': 'Энергия, кВтч'},
                     xaxis={'title': 'Номер получасовки'},
-                    title=f"Расход электроэнергии за сутки {new_date } по счетчику № {number_counter}",
+                    title=f"Расход электроэнергии за {choosen_month} по счетчику № {number_counter}",
                     showlegend=True,
                     legend=go.layout.Legend(
                         x=0,
@@ -273,7 +258,12 @@ def create_app():
             )
         return figure
     
-
+    #формирования графика потребления за день
+    @dashapp.callback(Output('click-data', 'children'),
+                      [Input('month-graph', 'clickData')])
+    def diplay_clickdata(clickData):
+        return json.dumps(clickData, indent=2)
+#/END_DASH_CALLBACKS-----------------------------------------------------------------------------------------------------------------
 
 
     @login_manager.user_loader
