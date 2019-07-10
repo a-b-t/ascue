@@ -140,7 +140,7 @@ def create_app():
     def update_output(date, value):
         if date is not None:
             if value == 'day':
-                date = f"= '{}'"
+                date = f"= '{date}'"
                 print(date)
                 return date
             if value == 'month':
@@ -202,8 +202,8 @@ def create_app():
     @dashapp.callback(Output('graph', 'figure'), 
                 [Input('submit-button', 'n_clicks')],
                 [State('intermediate-value', 'children'),
-                State('num-object-to-submit', 'children'),
-                State('list-counters', 'value')])
+                 State('num-object-to-submit', 'children'),
+                 State('list-counters', 'value')])
     def update_graph(n_clicks, new_date, number_object, number_counter):
         try:
             
@@ -215,62 +215,64 @@ def create_app():
                         """)
             query = """
                     SELECT
-                    N_INTER_RAS, VAL, N_SH, RASH_POLN
+                    DD_MM_YYYY, N_INTER_RAS, VAL, N_SH, RASH_POLN
                     -- COUNT(1)
                     FROM
                     CNT.BUF_V_INT
                     WHERE 1=1
-                    AND DD_MM_YYYY {}
+                    AND DD_MM_YYYY {} 
                     AND N_INTER_RAS BETWEEN 1 AND 48
                     AND N_OB = {}
                     AND N_GR_TY = 1
                     AND N_SH = '{}'
                     """.format(new_date, number_object, number_counter)
             df = pd.read_sql(query, con=conn)
-            number_counter = int(df.iloc[1]['N_SH'])
-
-            dict_convert_to_halfhour = {'1': '00:00', '2': '00:30', '3': '01:00', '4': '01:30', '5': '02:00', '6': '02:30', 
-                                    '7': '03:00', '8': '03:30', '9': '04:00', '10': '04:30', '11': '05:00', '12': '05:30',
-                                    '13': '06:00', '14': '06:30', '15': '07:00', '16': '07:30', '17': '08:00', '18': '08:30',
-                                    '19': '09:00', '20': '09:30', '21': '10:00', '22': '10:30', '23': '11:00', '24': '11:30',
-                                    '25': '12:00', '26': '12:30', '27': '13:00', '28': '13:30', '29': '14:00', '30': '14:30',
-                                    '31': '15:00', '32': '15:30', '33': '16:00', '34': '16:30', '35': '17:00', '36': '17:30',
-                                    '37': '18:00', '38': '18:30', '39': '19:00', '40': '19:30', '41': '20:00', '42': '20:30',
-                                    '43': '21:00', '44': '21:30', '45': '22:00', '46': '22:30', '47': '23:00', '48': '23:30'}
-            
-            df.N_INTER_RAS = df.N_INTER_RAS.astype(str).replace(dict_convert_to_halfhour)
-            df['DD_MM_YYYY'] = df['DD_MM_YYYY'].astype(str)
-            df['new_date'] = pd.to_datetime(df['DD_MM_YYYY'] + ' ' + df['N_INTER_RAS'])
-            df_freq_day = df.groupby(['N_SH', pd.Grouper(key='new_date', freq='D')])['VAL'].sum().reset_index()
-            print
-            
-            figure = go.Figure(
-                    data=[
-                        go.Bar(
-                            x=df_freq_day['new_date'].tolist(),
-                            y=df_freq_day['VAL'].tolist(),
-                            name='Расход',
-                            marker=go.bar.Marker(
-                                color='rgb(55, 83, 109)'
-                            )
-                        ),
-                    ],
-                    layout=go.Layout(
-                        yaxis={'type': 'log', 'title': 'Энергия, кВтч'},
-                        xaxis={'title': 'Номер получасовки'},
-                        title=f"Расход электроэнергии за сутки {new_date } по счетчику № {number_counter}",
-                        showlegend=True,
-                        legend=go.layout.Legend(
-                            x=0,
-                            y=1.0
-                        ),
-                        margin=go.layout.Margin(l=40, r=0, t=40, b=30)
-                    )
-                )
-            return figure
         finally:
             cur.close()
             conn.close()
+
+        number_counter = int(df.iloc[1]['N_SH'])
+
+        dict_convert_to_halfhour = {'1': '00:00', '2': '00:30', '3': '01:00', '4': '01:30', '5': '02:00', '6': '02:30', 
+                                '7': '03:00', '8': '03:30', '9': '04:00', '10': '04:30', '11': '05:00', '12': '05:30',
+                                '13': '06:00', '14': '06:30', '15': '07:00', '16': '07:30', '17': '08:00', '18': '08:30',
+                                '19': '09:00', '20': '09:30', '21': '10:00', '22': '10:30', '23': '11:00', '24': '11:30',
+                                '25': '12:00', '26': '12:30', '27': '13:00', '28': '13:30', '29': '14:00', '30': '14:30',
+                                '31': '15:00', '32': '15:30', '33': '16:00', '34': '16:30', '35': '17:00', '36': '17:30',
+                                '37': '18:00', '38': '18:30', '39': '19:00', '40': '19:30', '41': '20:00', '42': '20:30',
+                                '43': '21:00', '44': '21:30', '45': '22:00', '46': '22:30', '47': '23:00', '48': '23:30'}
+        
+        df['N_INTER_RAS'] = df['N_INTER_RAS'].astype(str).replace(dict_convert_to_halfhour)
+        df['DD_MM_YYYY'] = df['DD_MM_YYYY'].astype(str)
+        df['new_date'] = pd.to_datetime(df['DD_MM_YYYY'] + ' ' + df['N_INTER_RAS'])
+        df_freq_day = df.groupby(['N_SH', pd.Grouper(key='new_date', freq='D')])['VAL'].sum().reset_index()
+        
+        
+        figure = go.Figure(
+                data=[
+                    go.Bar(
+                        x=df_freq_day['new_date'].tolist(),
+                        y=df_freq_day['VAL'].tolist(),
+                        name='Расход',
+                        marker=go.bar.Marker(
+                            color='rgb(55, 83, 109)'
+                        )
+                    ),
+                ],
+                layout=go.Layout(
+                    yaxis={'type': 'log', 'title': 'Энергия, кВтч'},
+                    xaxis={'title': 'Номер получасовки'},
+                    title=f"Расход электроэнергии за сутки {new_date } по счетчику № {number_counter}",
+                    showlegend=True,
+                    legend=go.layout.Legend(
+                        x=0,
+                        y=1.0
+                    ),
+                    margin=go.layout.Margin(l=40, r=0, t=40, b=30)
+                )
+            )
+        return figure
+    
 
 
 
