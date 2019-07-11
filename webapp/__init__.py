@@ -88,14 +88,11 @@ def create_app():
                 [
                     dbc.Col(
                         [
-                            html.H4("1. Выберите объект:"),
-                            
-                            dcc.Dropdown(id='choose-object', options=df_number_obj, value='', placeholder='Выберите объект'),
-                            html.H4("2. Выберите фидер:"),
-                            dbc.RadioItems(id='list-counters', className="form-check"),
-                            html.H4("3. Выберите месяц:"),
+                            html.H4("1. Выберите объект:"),                            
+                            dcc.Dropdown(id='choose-object', options=df_number_obj, value='', placeholder='Выберите объект'),                                                        
+                            html.H4("2. Выберите месяц:"),
                             html.Div(dcc.DatePickerSingle(id='date-picker-single', date=dt(2018, 10,10))),
-                            dbc.Button("Загрузить данные", id='submit-button', color="secondary"),
+                            #dbc.Button("Загрузить данные", id='submit-button', color="secondary"),
                             html.Div(html.A(id='download-link', children='Скачать файл')),
                             dcc.Dropdown(id='dropdown', options=[{'label': i, 'value': i} for i in ['NYC', 'LA', 'SF']],
                                          value='NYC',
@@ -105,8 +102,8 @@ def create_app():
                     ),
                     dbc.Col(
                         [
-                            html.H2("График за месяц"),
-                            html.Div(dcc.Graph(id='month-graph')),
+                            #html.H4("График за месяц"),
+                            html.Div(dcc.Graph(id='month-graph', style={'height': '400px'})),
                             html.Div(id='json-month-data', style={'display': 'none'})
                         ]
                     ),
@@ -116,10 +113,17 @@ def create_app():
                 [
                     dbc.Col(
                         [
-                           #html.Div(html.Pre(id='click-data')),
-                           html.Div(dcc.Graph(id='day-graph')) 
+                          html.H4("3. Выберите фидер:"),
+                          dbc.RadioItems(id='list-counters', className="form-check"),  
                         ],
-                        md=10,
+                        md=4,
+                    ),
+                    dbc.Col(
+                        [
+                           #html.Div(html.Pre(id='click-data')),
+                           html.Div(dcc.Graph(id='day-graph', style={'height': '400px'})) 
+                        ],
+                        md=8,
                     )
                 ]
             )
@@ -182,10 +186,10 @@ def create_app():
 
     #создание датасетов DATAFRAME объекта за месяц, день   
     @dashapp.callback(Output('json-month-data', 'children'),
-                      [Input('date-picker-single', 'date')],
+                      [Input('list-counters', 'value')],   
                       [State('choose-object', 'value'),
-                       State('list-counters', 'value')])
-    def get_month_data(choosen_month, number_object, number_counter):
+                       State('date-picker-single', 'date')])
+    def get_month_data(number_counter, number_object, choosen_month):
         if choosen_month is not None:
             date = f"LIKE '{choosen_month[:-3]}-%'"
         try:
@@ -247,9 +251,9 @@ def create_app():
     
     #формирования графика потребления за месяц
     @dashapp.callback(Output('month-graph', 'figure'), 
-                [Input('submit-button', 'n_clicks')],
-                [State('json-month-data', 'children')])
-    def update_graph(n_clicks, json_month):
+                [Input('list-counters', 'value'), 
+                 Input('json-month-data', 'children')])
+    def update_graph(number_counter, json_month):
         datasets = json.loads(json_month)
         dff = pd.read_json(datasets['df_1'], orient='split', convert_dates='True')
 
@@ -300,7 +304,7 @@ def create_app():
                         y=dff_day['VAL'].tolist(),
                         name='Расход',
                         marker=go.bar.Marker(
-                            color='rgb(55, 83, 109)'
+                            color='green'
                         )
                     ),
                 ],
