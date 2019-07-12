@@ -13,7 +13,7 @@ children=[
     dbc.DropdownMenu(
         nav=True,
         in_navbar=True,
-        label="Menu",
+        label="Меню",
         children=[
             dbc.DropdownMenuItem("Отчеты", href='/dash/reports'),
             dbc.DropdownMenuItem("Графики", href='/dash/'),
@@ -30,7 +30,7 @@ sticky="top",
 #/end_navbar---------------------------------------------------------------------------
 #body------------------------------------------------------------------------------
 body1 = dbc.Container(
-    [
+    [        
         dbc.Row(
             [
                 dbc.Col(
@@ -47,7 +47,14 @@ body1 = dbc.Container(
                 dbc.Col(
                     [
                         #html.H4("График за месяц"),
-                        html.Div(dcc.Graph(id='month-graph', style={'height': '400px'})),
+                        html.Div(
+                            [dcc.Loading(id='loading-1', 
+                                         children=
+                                                [html.Div(
+                                                          dcc.Graph(id='month-graph', style={'height': '400px'}))], 
+                                        type='circle'                                                
+                                        )
+                            ]),
                         html.Div(id='json-month-data', style={'display': 'none'})
                     ]
                 ),
