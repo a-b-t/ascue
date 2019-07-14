@@ -2,6 +2,7 @@ import cx_Oracle
 import pandas as pd
 from webapp.config import USER_NAME, PASSWORD, dns_tsn
 
+
 #получение списка объектов из БД
 try:
     conn = cx_Oracle.connect(USER_NAME, PASSWORD, dns_tsn)

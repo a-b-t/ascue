@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
-from flask import Flask
+from flask import Flask, abort
 from flask_login import LoginManager, login_required
 from flask_migrate import Migrate
 from webapp.db import db
@@ -21,6 +21,7 @@ migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'user.login'
+login_manager.login_message = u"Пожалуйста, авторизуйтесь, чтобы получить доступ к этой странице."
 app.register_blueprint(admin_blueprint)
 app.register_blueprint(user_blueprint)
 app.register_blueprint(news_blueprint)
@@ -42,7 +43,7 @@ def display_page(pathname):
     elif pathname == '/dash/reports':
         return layout2
     else:
-        return '404'
+        return abort(404)
 
 
 
@@ -51,5 +52,5 @@ def display_page(pathname):
 def load_user(user_id):
     return User.query.get(user_id)
 
-    
+
 

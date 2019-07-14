@@ -42,7 +42,7 @@ body1 = dbc.Container(
                         #dbc.Button("Загрузить данные", id='submit-button', color="secondary"),
                         html.Div(html.A(id='download-link', children='Сохранить отчет за месяц'))
                     ],
-                    md=4,
+                    md=4, 
                 ),
                 dbc.Col(
                     [
@@ -52,13 +52,13 @@ body1 = dbc.Container(
                                          children=
                                                 [html.Div(
                                                           dcc.Graph(id='month-graph', style={'height': '400px'}))], 
-                                        type='circle'                                                
+                                        type='circle', fullscreen=True                                               
                                         )
                             ]),
                         html.Div(id='json-month-data', style={'display': 'none'})
                     ]
                 ),
-            ]
+            ], style={'height': '401px'}
         ),
         dbc.Row(
             [

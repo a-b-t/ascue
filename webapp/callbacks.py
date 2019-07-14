@@ -6,8 +6,8 @@ from flask import send_from_directory
 import pandas as pd
 import openpyxl
 import os
-import plotly.graph_objs as go
 import time
+import plotly.graph_objs as go
 from webapp.config import USER_NAME, PASSWORD, dns_tsn
 from webapp import dashapp
 
@@ -193,6 +193,7 @@ def get_month_data(number_counter, number_object, choosen_month):
                   [Input('list-counters', 'value'), 
                   Input('json-month-data', 'children')])
 def update_graph(number_counter, json_month):    
+    
     datasets = json.loads(json_month)
     dff = pd.read_json(datasets['df_1'], orient='split', convert_dates='True')
 
@@ -210,7 +211,7 @@ def update_graph(number_counter, json_month):
                 ),
             ],
             layout=go.Layout(
-                yaxis={'type': 'log', 'title': 'Энергия, кВтч'},
+                yaxis={'type': 'log', 'title': 'Энергия, кВтч', 'autorange': True},
                 xaxis={'title': ''},
                 title=f"Расход электроэнергии за месяц по счетчику № {number_counter}",
                 showlegend=True,
