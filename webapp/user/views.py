@@ -1,12 +1,16 @@
-from flask import Blueprint, flash, redirect, url_for, render_template
+from flask import Blueprint, flash, redirect, url_for, render_template, g
 from flask_login import current_user, login_user, logout_user
-
 from webapp.user.forms import LoginForm, RegistrationForm
 from webapp.user.models import User
 from webapp import db
 
 blueprint = Blueprint('user', __name__, url_prefix='/users')
 
+@blueprint.before_request
+def before_request():
+    if current_user.is_authenticated:
+        g.user = current_user
+        print(g.user.n_ob)
 
 @blueprint.route('/login')
 def login():
@@ -62,3 +66,5 @@ def process_reg():
                 flash('Ошибка в поле "{}": - {}'.format(getattr(form, field).label.text, error))
         return redirect(url_for('user.register'))    
     return redirect(url_for('user.register'))
+
+

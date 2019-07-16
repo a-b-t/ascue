@@ -9,9 +9,12 @@
         <li class="nav-item active">
             <a class="nav-link" href="/">Главная страница</a>
         </li>
-        {% if current_user.is_admin %}
+        {% if current_user.is_authenticated %}
             <li class="nav-item">
                 <a class="nav-link" href="/dash/">Графики</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/dash/reports">Отчеты</a>
             </li>
         {% endif %}
         </ul>
