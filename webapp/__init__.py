@@ -17,11 +17,9 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'user.login'
     login_manager.login_message = u"Пожалуйста, авторизуйтесь, чтобы получить доступ к этой странице."
-   
-      
+         
     with app.app_context():
 
-                    
         app.register_blueprint(admin_blueprint)
         app.register_blueprint(user_blueprint)
         app.register_blueprint(news_blueprint)
@@ -29,8 +27,12 @@ def create_app():
         from webapp.dashapp import my_dash_app
         app = my_dash_app.Add_Dash(app)
 
-        
-            
+        @app.before_request
+        def before_request():
+            if current_user.is_authenticated:
+                g.user = current_user
+                print(g.user.n_ob)
+                    
         @login_manager.user_loader
         def load_user(user_id):
             return User.query.get(user_id)

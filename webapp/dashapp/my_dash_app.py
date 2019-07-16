@@ -1,24 +1,22 @@
+import cx_Oracle
 import dash
 import dash_bootstrap_components as dbc
-import dash_html_components as html
 import dash_core_components as dcc
-from flask_login import login_required 
-import cx_Oracle
 from dash.dependencies import Input, Output, State
+import dash_table
+import dash_html_components as html
 from datetime import datetime, timedelta
 import json
 from flask import send_from_directory, g, abort, current_app
-import pandas as pd
+from flask_login import login_required, current_user
 import openpyxl
 import os
-import time
+import pandas as pd
 import plotly.graph_objs as go
-from webapp.config import USER_NAME, PASSWORD, dns_tsn
-import dash_table
-from datetime import datetime as dt
-from webapp.queries import df_number_obj
-from flask_login import current_user
+import time
 
+from webapp.config import USER_NAME, PASSWORD, dns_tsn
+from webapp.queries import df_number_obj
 
 
 def Add_Dash(server): 
@@ -62,7 +60,7 @@ def Add_Dash(server):
                             html.H4("1. Выберите объект:"),                            
                             dcc.Dropdown(id='choose-object', options=df_number_obj, value='', placeholder='Выберите объект'),                                                        
                             html.H4("2. Выберите месяц:"),
-                            html.Div(dcc.DatePickerSingle(id='date-picker-single', date=dt(2018, 10,10))),
+                            html.Div(dcc.DatePickerSingle(id='date-picker-single', date=datetime(2018, 10,10))),
                             #dbc.Button("Загрузить данные", id='submit-button', color="secondary"),
                             html.Div(dbc.Button(id='download-link', children='Сохранить отчет за месяц'))
                         ],
@@ -79,7 +77,8 @@ def Add_Dash(server):
                                             type='circle', fullscreen=True                                               
                                             )
                                 ]),
-                            html.Div(id='json-month-data', style={'display': 'none'})
+                            html.Div(id='json-month-data', style={'display': 'none'}),
+                            #html.Div(children=f"'{g.user.n_ob}'", id='user-object', style={'display': 'none'})
                         ]
                     ),
                 ], style={'height': '401px'}
@@ -126,7 +125,7 @@ def Add_Dash(server):
                         columns=[{'name': 'Номер объекта', 'id': 'N_OB'}, 
                         {'name': 'Счетчик', 'id':'N_SH'}, 
                         {'name': 'Фидер', 'id': 'TXT'}, 
-                        {'name': 'Время прихода последних данных', 'id': 'DT'},
+                        {'name': 'Последние данные', 'id': 'DT'},
                         {'name': 'Дней нет данных', 'id': 'Дней нет данных'}],
                         style_table={'maxHeight': '300px', 'overflowY': 'scroll'}
                         )),
@@ -137,7 +136,7 @@ def Add_Dash(server):
                 dbc.Col(
                     [
                         html.H4("2. Выберите месяц:"),
-                        html.Div(dcc.DatePickerSingle(id='date-picker-single', date=dt(2018, 10,10))),
+                        html.Div(dcc.DatePickerSingle(id='date-picker-single', date=datetime(2018, 10,10))),
                     ]
                 )
             )
@@ -419,7 +418,7 @@ def init_callbacks(dashapp):
             )
         return figure
     
-
+    
 
     #создание таблицы время прихода последних данных--------------------------------------------------------------------------------------
     @dashapp.callback(Output('table-last-day', 'data'),
@@ -443,14 +442,27 @@ def init_callbacks(dashapp):
                     """.format(number_object)
             df_table_dt = pd.read_sql(query, con=conn)
             
-            def convert_timedelta(duration):
-                days, seconds = duration.days, duration.seconds
-                hours = days*24 + seconds//3600
-                minutes = (seconds % 3600// 60)
-                seconds = seconds % 60
-                return hours, minutes, seconds
+            def days(n):
+                days = ['день', 'дня', 'дней']
+
+                if n % 10 ==1 and n % 100 != 11:
+                    p = 0
+                elif 2 <= n % 10 <= 4 and (n %100 < 10 or n% 100 >=20):
+                    p = 1
+                else:
+                    p = 2
+                return str(n) + ' ' + days[p]
+
+
+            def convert_timedelta(time_delta):
+                resolution = ['days', 'hours', 'minutes', 'seconds']
+                to_show = {comp: getattr(dt.components, comp) for comp in resolution}
+                right_day = days(to_show['days'])
+                return "{} {hours:02d} ч.".format(right_day, **to_show)
             
             df_table_dt['Дней нет данных'] = (datetime.now() - df_table_dt['DT'])  
+            df_table_dt['Дней нет данных'] = df_table_dt['Дней нет данных'].apply(convert_timedelta)
+            
             
             df_result = df_table_dt.to_dict('records')
             

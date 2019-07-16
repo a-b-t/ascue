@@ -6,12 +6,6 @@ from webapp import db
 
 blueprint = Blueprint('user', __name__, url_prefix='/users')
 
-@blueprint.before_request
-def before_request():
-    if current_user.is_authenticated:
-        g.user = current_user
-        print(g.user.n_ob)
-
 @blueprint.route('/login')
 def login():
     if current_user.is_authenticated:
